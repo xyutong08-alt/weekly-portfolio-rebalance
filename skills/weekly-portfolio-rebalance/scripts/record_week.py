@@ -120,6 +120,8 @@ def prepare(data, batch, previous, allow_same_weights=False, allow_previous_boun
 
 def commit(data_path, out_path, data):
     data_path, out_path = Path(data_path), Path(out_path)
+    if out_path.suffix.lower() not in ('.docx', '.md'):
+        raise ValueError('输出文件应为.docx或.md')
     if data_path.resolve() == out_path.resolve():
         raise ValueError('JSON和Word不能使用同一路径')
     for p in (data_path, out_path):
@@ -134,16 +136,19 @@ def commit(data_path, out_path, data):
     try:
         with tempfile.NamedTemporaryFile(dir=data_path.parent, suffix='.json', delete=False) as f:
             tmp_json = Path(f.name)
-        with tempfile.NamedTemporaryFile(dir=out_path.parent, suffix='.docx', delete=False) as f:
+        with tempfile.NamedTemporaryFile(dir=out_path.parent, suffix=out_path.suffix, delete=False) as f:
             tmp_doc = Path(f.name)
         dump(tmp_json, data)
-        w.build(data, str(tmp_doc))
-        restored = w.import_docx(str(tmp_doc))
-        if (restored['start'], restored['end']) != (data['start'], data['end']) or len(restored['portfolios']) != len(data['portfolios']):
-            raise ValueError('Word往返数量或区间校验失败')
-        for a, b in zip(data['portfolios'], restored['portfolios']):
-            if (a['name'], a.get('inst'), a['date'], a['bench']) != (b['name'], b.get('inst'), b['date'], b['bench']) or sorted(w.rows_of(a)) != sorted(w.rows_of(b)):
-                raise ValueError('Word往返数据校验失败：' + a['name'])
+        if out_path.suffix.lower() == '.md':
+            w.build_markdown(data, str(tmp_doc))
+        else:
+            w.build(data, str(tmp_doc))
+            restored = w.import_docx(str(tmp_doc))
+            if (restored['start'], restored['end']) != (data['start'], data['end']) or len(restored['portfolios']) != len(data['portfolios']):
+                raise ValueError('Word往返数量或区间校验失败')
+            for a, b in zip(data['portfolios'], restored['portfolios']):
+                if (a['name'], a.get('inst'), a['date'], a['bench']) != (b['name'], b.get('inst'), b['date'], b['bench']) or sorted(w.rows_of(a)) != sorted(w.rows_of(b)):
+                    raise ValueError('Word往返数据校验失败：' + a['name'])
         os.replace(tmp_doc, out_path)
         os.replace(tmp_json, data_path)
     except Exception:

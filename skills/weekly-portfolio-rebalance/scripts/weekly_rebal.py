@@ -16,11 +16,12 @@
 
 命令：
   python3 weekly_rebal.py check  data.json [上周.docx ...]   # 规则检查：跳过机构、多期系列、重复、缺基准、合计异常
-  python3 weekly_rebal.py build  data.json out.docx          # 生成 docx（不需要模板）
+  python3 weekly_rebal.py build  data.json out.docx          # 生成 docx；输出改为out.md则生成Markdown
   python3 weekly_rebal.py import 某周.docx > data.json         # 从已交付的 docx 反解出数据（断点续做用）
   python3 weekly_rebal.py stats  data.json                   # 周总结用：加仓次数排行、方向统计、日期分布
 """
 import json
+import html
 import re
 import sys
 import zipfile
@@ -181,6 +182,37 @@ def build(data, out):
     return len(ps)
 
 
+def _md_text(value):
+    text = html.escape(str(value), quote=False).replace('\\', '\\\\')
+    for char in ('`', '*', '_', '[', ']'):
+        text = text.replace(char, '\\' + char)
+    return text.replace('|', '&#124;').replace('\r\n', '\n').replace('\r', '\n').replace('\n', '<br>')
+
+
+def build_markdown(data, out):
+    """Export all groups and displayed operation labels without Word rendering."""
+    lines = [f"# 投顾组合调仓汇总（{_md_text(data['start'])} – {_md_text(data['end'])}）",
+             '', f"一共{len(data['portfolios'])}个组合", '']
+    for number, p in enumerate(data['portfolios'], 1):
+        lines += [f"## {number}、{_md_text(full_name(p))}", '']
+        if p.get('bench') is not None:
+            lines += ['策略业绩基准：' + _md_text(p['bench'] or '（待补充）'), '']
+        lines += ['调仓日期：' + _md_text(p['date']), '']
+        if p.get('reason') and not is_generic(p['reason']):
+            lines += ['调仓理由：' + _md_text(p['reason']), '']
+        for asset, funds in p['groups'].items():
+            lines += [f"### {_md_text(asset)}　调仓后合计 {_pct(sum(f[3] for f in funds))}", '',
+                      '| 基金代码 | 基金名称 | 操作 | 调整前 | 调整后 | 权重变化 |',
+                      '| --- | --- | --- | ---: | ---: | ---: |']
+            for a, code, name, op, before, after in rows_of(dict(groups={asset: funds})):
+                values = [code, name, op, _pct(before), _pct(after), _signed(after-before)]
+                lines.append('| ' + ' | '.join(_md_text(v) for v in values) + ' |')
+            lines.append('')
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+    return len(data['portfolios'])
+
+
 # ============================================================ 从 docx 反解数据
 def import_docx(path):
     x = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
@@ -316,7 +348,8 @@ def stats(data):
 if __name__ == "__main__":
     cmd, args = sys.argv[1], sys.argv[2:]
     if cmd == "build":
-        n = build(load(args[0]), args[1])
+        builder = build_markdown if args[1].lower().endswith('.md') else build
+        n = builder(load(args[0]), args[1])
         print(f"已生成 {args[1]}，一共{n}个组合")
     elif cmd == "check":
         check(load(args[0]), args[1:])
