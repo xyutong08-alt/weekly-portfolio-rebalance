@@ -22,6 +22,8 @@ python3 SKILL/scripts/record_week.py append --data /工作目录/rebal_1120-1127
 
 追加结果给出added/skipped/pending/warnings。pending写入当周 `pending.json`；所有状态和来源保留在JSON，Word不含这些附加字段。用户对pending作出决定后在decisions.json保存日期、名称、ID、比较对象、用户原话；再将批准项单独形成batch并带 `--allow-same-weights` 追加，此标志仅用于用户明确批准的批次。
 
+每批只提交尚未处理的调仓，不反复把整周JSON作为batch传入。相同类型的待决定项在本批结束后合并询问，列出名称、日期、比较对象及可选决定；其余项继续保存。用户只批准其中几项时，不扩大到整批。新发现的同类项可在下一批集中追加询问；已记录的决定不重复询问，除非范围或证据改变。
+
 每次保存会在data旁的backups目录备份已有JSON和Word。替换失败时保留待修复的备份；检查文件后再继续。文件是本机路径，不要用已不存在的device_stage_files/device_commit_files等旧宿主工具。历史字体、页边距、表宽沿用生成器。
 
 ## 常规周起始周五复核
@@ -45,3 +47,7 @@ python3 SKILL/scripts/record_week.py summary --data /工作目录/指定区间/d
 该摘要包括数量/日期/机构、缺项、前5名加减仓基金（排除货币、同基金份额按组合去重），以及剔除“策略成立”后的资产净变化。它是探索摘要，不替代对异常或复杂方向的具体操作核对。不要为简单总结先打印整个data.json或旧stats的全部组合明细。
 
 没有上期文件时的 `boundary_review.json`：保留起始周五日期、完整策略名、机构及可用ID/URL，`previous_match` 为 `unknown`，`decision` 为 `pending`；在chat列出完整清单，让使用者逐项决定。不要生成虚假的上期匹配结果，也不要自动追加。
+
+## Markdown输出
+
+用户明确要求md时，`append`的`--out`改为`.md`路径，仍通过相同的预检查、去重及JSON备份后生成；不创建Word，也不执行字体或图片渲染。已完成的JSON只需转换格式时，用`weekly_rebal.py build data.json out.md`，不用重新拉网页。Markdown完整保留每个资产组、基金代码、名称、标签、前后权重与变化；表格特殊字符转义。以JSON为断点记录，后续续做继续使用JSON；当前脚本不从md反解记录，不宣称做了Word往返检查。
