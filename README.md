@@ -1,6 +1,6 @@
 # 每周调仓汇总 · Codex Skill
 
-从投顾星球已登录网页或用户提供的截图提取调仓明细，检查重复、基金数量与权重，生成指定日期区间的 Word 汇总，通常使用近七日。
+从投顾星球已登录网页或用户提供的截图提取调仓明细，检查重复、基金数量与权重，生成指定日期区间的 Word 或 Markdown 汇总，通常使用近七日。
 
 ## 安装
 
@@ -33,11 +33,19 @@
 
 具体收录规则见 [references/rules.md](skills/weekly-portfolio-rebalance/references/rules.md)，可按自己的业务口径调整。默认目录由使用者指定，不依赖作者电脑路径。
 
+## 输出格式
+
+默认交付 Word；用户明确要求 Markdown 或 md 时只交付 `.md`，不创建 Word、不执行字体预检和图片渲染。完整JSON仍留作断点及后续补录依据。
+
 ## 减少token消耗
 
 - 规则按需加载，网页只提取相关字段，不反复输出整页业绩和历史记录。
 - 记录工具默认只报告编号、数量和异常；完整基金数据仍保存在本地，排查问题时才用 `--verbose`。
 - 简短总结使用 `record_week.py summary`，避免先输出整周持仓。
+- 列表只发现候选，完整持仓在详情提取一次；返回列表先等加载完成再搜索，减少重复读取和重试。
+- 同批异常集中询问，其他有效项继续保存；只传入本批新增候选，不反复提交整周JSON。
+- Word先检查中文字体，集中渲染；补录后只复核新增或图像发生变化的页面，已检查且图像完全一致的页面可复用结论。环境改变则全部重查。
+- 字体预检和页面复核工具用法见 [预览与复核](skills/weekly-portfolio-rebalance/references/rendering.md)。
 
 ## 文件
 
@@ -45,7 +53,8 @@
 - agents/openai.yaml：技能显示名称与示例调用。
 - references/：网页读取、收录规则、数据格式与脚本用法。
 - scripts/record_week.py：预检查、去重、追加及备份。
-- scripts/weekly_rebal.py：Word 生成、导入及统计辅助。
+- scripts/weekly_rebal.py：Word/Markdown生成、Word导入及统计辅助。
+- scripts/render_review.py：本地中文字体预检和已检查页面清单，不自动代替视觉审阅。
 
 仓库不包含登录凭证、验证码、用户截图、历史调仓文档或实际周数据。技能只执行数据读取与本地记录，不执行投资交易。
 
