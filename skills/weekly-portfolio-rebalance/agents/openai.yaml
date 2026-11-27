@@ -1,0 +1,4 @@
+interface:
+  display_name: "每周调仓汇总"
+  short_description: "从投顾星球网页或截图提取调仓数据，去重检查并更新本周Word汇总"
+  default_prompt: "使用 $weekly-portfolio-rebalance 整理指定日期的投顾调仓，按既有规则去重并更新本周 Word。"
