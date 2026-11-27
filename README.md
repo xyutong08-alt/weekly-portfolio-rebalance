@@ -6,9 +6,9 @@
 
 把仓库链接交给 Codex，并说：
 
-> 请从 https://github.com/xyutong08-alt/weekly-portfolio-rebalance 安装 weekly-portfolio-rebalance 技能。
+> 请从 https://github.com/xyutong08-alt/weekly-portfolio-rebalance/tree/main/skills/weekly-portfolio-rebalance 安装 weekly-portfolio-rebalance 技能。
 
-本仓库根目录即完整技能目录，入口为 [SKILL.md](SKILL.md)。请安装整个目录，包含 scripts、references 和 agents，不能只复制 SKILL.md。
+完整技能在 `skills/weekly-portfolio-rebalance/`，入口为 [SKILL.md](skills/weekly-portfolio-rebalance/SKILL.md)。请安装整个目录，包含 scripts、references 和 agents，不能只复制 SKILL.md。
 
 ## 使用
 
@@ -29,7 +29,7 @@
 - 保留“分类缺失”基金，基准未给时标记待补充。
 - 追加前备份，生成后检查 Word 与 JSON 的记录一致。
 
-具体收录规则见 [references/rules.md](references/rules.md)，可按自己的业务口径调整。默认目录由使用者指定，不依赖作者电脑路径。
+具体收录规则见 [references/rules.md](skills/weekly-portfolio-rebalance/references/rules.md)，可按自己的业务口径调整。默认目录由使用者指定，不依赖作者电脑路径。
 
 ## 文件
 
@@ -40,3 +40,7 @@
 - scripts/weekly_rebal.py：Word 生成、导入及统计辅助。
 
 仓库不包含登录凭证、验证码、用户截图、历史调仓文档或实际周数据。技能只执行数据读取与本地记录，不执行投资交易。
+
+## 许可证
+
+[MIT](LICENSE) — 允许使用、修改和分发，保留版权与许可声明。
