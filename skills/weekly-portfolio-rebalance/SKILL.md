@@ -12,6 +12,7 @@ description: 从投顾星球网页或截图提取基金投顾调仓，按指定�
 - 首次执行读 [收录规则](references/rules.md)；同一会话无需重读未变文件。
 - 网页读取才读 [网页方法](references/browser.md)；截图补录不加载浏览器步骤。
 - 首次调用记录工具或需要恢复、特殊参数时读 [记录工具](references/recording.md)。执行脚本不必先打印源码。
+- 首次生成 Word 或按历史口径写汇报前，参考 [历史周报与模板](references/history-templates/版式与汇报.md)。
 
 ## 日期与起始周五
 
