@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Local JSON + Word persistence. Browser extraction remains with the host UI tools."""
 import argparse
-import contextlib
 import copy
+from collections import Counter, defaultdict
 import datetime as dt
-import io
 import json
 import math
 import os
@@ -67,7 +66,7 @@ def validate(p):
             raise ValueError(f'资产组{a}与源页面合计不符：{actual:.2f} / {expected}')
 
 
-def prepare(data, batch, previous, allow_same_weights=False):
+def prepare(data, batch, previous, allow_same_weights=False, allow_previous_boundary=False):
     result = dict(added=[], skipped=[], pending=[], warnings=[])
     existing = list(data['portfolios'])
     old = [p for path in previous for p in w.load(str(path))['portfolios']]
@@ -84,7 +83,11 @@ def prepare(data, batch, previous, allow_same_weights=False):
         except (ValueError, TypeError, KeyError) as e:
             result['pending'].append(dict(name=label, reason=str(e), portfolio=p))
             continue
-        peers = existing + old
+        # Explicit approval may include a starting Friday already present last period.
+        approved_boundary = (allow_previous_boundary
+                             and p['date'] == data['start'].replace('.', '-')
+                             and dt.date.fromisoformat(p['date']).weekday() == 4)
+        peers = existing + ([] if approved_boundary else old)
         same = next((o for o in peers if key(o) == key(p) or (p.get('adjustment_id') and o.get('adjustment_id') == p['adjustment_id'])), None)
         if same:
             result['skipped'].append(dict(name=label, reason='同组合同日期或同调仓ID已有', portfolio=p))
@@ -156,17 +159,56 @@ def commit(data_path, out_path, data):
                 p.unlink()
 
 
+def compact_result(result):
+    # Keep complete data in data.json/pending.json; avoid echoing whole portfolios.
+    return {k: [{field: value for field, value in item.items() if field != 'portfolio'} for item in v]
+            if isinstance(v, list) else v for k, v in result.items()}
+
+
+def summary(data):
+    ps = data['portfolios']
+    up, down = defaultdict(set), defaultdict(set)
+    assets = defaultdict(float)
+    for i, p in enumerate(ps):
+        if (p.get('reason') or '').strip() == '策略成立':
+            continue
+        for asset, code, name, op, before, after in w.rows_of(p):
+            assets[asset] += after - before
+            if asset == '货币':
+                continue
+            fund = re.sub(r'(?:[ACEBDI](?:类)?)(?=\(|$)', '', name)
+            if op in ('建仓', '加仓'):
+                up[fund].add(i)
+            elif op in ('减仓', '清仓'):
+                down[fund].add(i)
+    rank = lambda groups: sorted([dict(fund=n, portfolios=len(ids)) for n, ids in groups.items()], key=lambda x: (-x['portfolios'], x['fund']))[:5]
+    return dict(total=len(ps), dates=dict(sorted(Counter(p['date'] for p in ps).items())),
+                institutions=Counter(p['inst'] for p in ps).most_common(),
+                missing_bench=[p['name'] for p in ps if p.get('bench') == ''],
+                incomplete=[dict(name=p['name'], total=round(sum(f[3] for rows in p['groups'].values() for f in rows), 2)) for p in ps if abs(sum(f[3] for rows in p['groups'].values() for f in rows)-100) > .15],
+                stopped=[p['name'] for p in ps if p.get('status')],
+                most_added=rank(up), most_reduced=rank(down),
+                asset_changes={a:round(v,2) for a,v in assets.items()},
+                basis='排名排除货币；按组合去重并合并份额；方向统计排除策略成立，资产变化为平台分类的简单合计')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('command', choices=['init', 'preview', 'append'])
+    ap.add_argument('command', choices=['init', 'preview', 'append', 'summary'])
     ap.add_argument('--data', required=True, type=Path)
-    ap.add_argument('--end')
+    ap.add_argument('--start', help='任意区间开始日期，与--end配合，均包含')
+    ap.add_argument('--end', help='结束日期；不提供--start时需为周五，兼容周任务')
     ap.add_argument('--from-docx', type=Path)
     ap.add_argument('--batch', type=Path)
     ap.add_argument('--out', type=Path)
     ap.add_argument('--previous', nargs='*', default=[], type=Path)
     ap.add_argument('--allow-same-weights', action='store_true')
+    ap.add_argument('--allow-previous-boundary', action='store_true', help='仅供用户明确批准的起始周五补录批次，仍检查本期重复')
+    ap.add_argument('--verbose', action='store_true', help='输出完整候选数据，仅排查问题时使用')
     a = ap.parse_args()
+    if a.command == 'summary':
+        print(json.dumps(summary(read(a.data)), ensure_ascii=False, indent=2))
+        return
     if a.command == 'init':
         if a.data.exists():
             raise ValueError('已有JSON，继续使用；拒绝覆盖初始化')
@@ -176,9 +218,15 @@ def main():
             if not a.end:
                 raise ValueError('请提供本周五 --end 或 --from-docx')
             end = dt.date.fromisoformat(a.end)
-            if end.weekday() != 4:
-                raise ValueError('--end必须是周五')
-            data = dict(start=(end-dt.timedelta(days=7)).strftime('%Y.%m.%d'), end=end.strftime('%Y.%m.%d'), portfolios=[])
+            if a.start:
+                start = dt.date.fromisoformat(a.start)
+                if start > end:
+                    raise ValueError('开始日期不能晚于结束日期')
+            else:
+                if end.weekday() != 4:
+                    raise ValueError('任意区间请同时提供--start和--end；仅提供--end时需为周五')
+                start = end-dt.timedelta(days=7)
+            data = dict(start=start.strftime('%Y.%m.%d'), end=end.strftime('%Y.%m.%d'), portfolios=[])
         a.data.parent.mkdir(parents=True, exist_ok=True)
         dump(a.data, data)
         print(json.dumps(dict(data=str(a.data), count=len(data['portfolios'])), ensure_ascii=False))
@@ -190,7 +238,7 @@ def main():
         batch = batch['portfolios']
     if not isinstance(batch, list):
         raise ValueError('batch应为数组或含portfolios的对象')
-    data, result = prepare(read(a.data), batch, a.previous, a.allow_same_weights)
+    data, result = prepare(read(a.data), batch, a.previous, a.allow_same_weights, a.allow_previous_boundary)
     if a.command == 'append':
         if not a.out:
             raise ValueError('需要 --out')
@@ -202,7 +250,7 @@ def main():
         if saved:
             dump(pending, saved)
     result['total'] = len(data['portfolios'])
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result if a.verbose else compact_result(result), ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':
