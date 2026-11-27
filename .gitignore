@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+backups/
+rebal_*/
+data.json
+pending.json
+decisions.json
+*.docx
+*.pdf
+*.png
+*.jpg
